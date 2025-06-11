@@ -36,12 +36,13 @@ final serviceLocator = GetIt.instance;
 Future initDependencies() async {
   await _initCourseModule();
   await _initBatchModule();
+  await _initApiModule();
   await _initHomeModule();
   await _initAuthModule();
   await _initSplashModule();
 }
 
-Future<void> initApiModule() async {
+Future _initApiModule() async {
   // Dio instance
   serviceLocator.registerLazySingleton<Dio>(() => Dio());
   serviceLocator.registerLazySingleton(() => ApiService(serviceLocator<Dio>()));
@@ -88,42 +89,32 @@ Future _initCourseModule() async {
   );
 }
 
-Future<void> _initBatchModule() async {
-  // Data Source
+Future _initBatchModule() async {
+  serviceLocator.registerFactory(() => BatchViewModel());
+
+  serviceLocator.registerLazySingleton<HiveService>(() => HiveService());
   serviceLocator.registerFactory(
         () => BatchLocalDataSource(hiveService: serviceLocator<HiveService>(), batchHiveModel: BatchHiveModel(batchName: '')),
   );
-  serviceLocator.registerFactory(
-        () => BatchRemoteDatasource(apiService: serviceLocator<ApiService>()),
-  );
-
-  // Repository
-  serviceLocator.registerFactory<BatchLocalRepository>(
-        () => BatchLocalRepository(
-       batchDataSource: serviceLocator<BatchLocalDataSource>(),
-    ),
-  );
-
+  serviceLocator.registerLazySingleton<BatchRemoteDatasource>(() => BatchRemoteDatasource(apiService: serviceLocator<ApiService>()));
+  serviceLocator.registerLazySingleton<IBatchRepository>(() => BatchLocalRepository(
+    batchDataSource: serviceLocator(),
+  ));
   serviceLocator.registerFactory<BatchRemoteRepository>(
-        () => BatchRemoteRepository(batchRemoteDataSource:serviceLocator<BatchRemoteDatasource>(),
-
+        () => BatchRemoteRepository(
+          batchRemoteDataSource: serviceLocator<BatchRemoteDatasource>(),
     ),
   );
 
-  serviceLocator.registerFactory(
-        () => GetAllBatchesUseCase(
-      batchRepository: serviceLocator<BatchRemoteRepository>(),
-    ),
-  );
-  serviceLocator.registerFactory(
-          () => CreateBatchUseCase(
-        batchRepository: serviceLocator<BatchRemoteRepository>(),
-      ));
-
-  serviceLocator.registerFactory(()=>DeleteBatchUseCase(
-       batchRepository: serviceLocator<BatchRemoteRepository>()));
-
-  }
+  serviceLocator.registerLazySingleton(() => CreateBatchUseCase(batchRepository: serviceLocator<BatchRemoteRepository>()));
+  serviceLocator.registerLazySingleton(() => DeleteBatchUseCase(batchRepository: serviceLocator<BatchRemoteRepository>()));
+  serviceLocator.registerLazySingleton(() => GetAllBatchesUseCase(batchRepository: serviceLocator<BatchRemoteRepository>()));
+  serviceLocator.registerFactory(() => BatchBloc(
+    batchUsecase: serviceLocator<CreateBatchUseCase>(),
+    deleteBatches: serviceLocator<DeleteBatchUseCase>(),
+    getbatches: serviceLocator<GetAllBatchesUseCase>(),
+  ));
+}
 
 Future _initHomeModule() async {
   serviceLocator.registerLazySingleton(() => HomeViewModel());
