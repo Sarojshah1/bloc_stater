@@ -12,6 +12,7 @@ class StudentLocalDataSource implements StudentDataSource {
 
   @override
   Future<void> addStudents(StudentEntity item) async {
+    print(item);
     final studentModel = StudentHiveModel.fromEntity(item);
     await hiveService.addStudent(studentModel);
   }

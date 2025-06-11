@@ -1,6 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
+import 'package:student_management/core/network/api_services.dart';
 import 'package:student_management/core/network/hive_service.dart';
 import 'package:student_management/features/auth/data/data_source/local_datasource/student_local_datasource.dart';
+import 'package:student_management/features/auth/data/data_source/student_datasource.dart';
 import 'package:student_management/features/auth/data/repository/student_repository_impl.dart';
 import 'package:student_management/features/auth/domain/repository/student_repository.dart';
 import 'package:student_management/features/auth/domain/use_case/add_students_usecase.dart';
@@ -9,8 +12,10 @@ import 'package:student_management/features/auth/domain/use_case/get_all_student
 import 'package:student_management/features/auth/presentation/view_model/login_view_model/login_view_model.dart';
 import 'package:student_management/features/auth/presentation/view_model/register_view_model/register_view_model.dart';
 import 'package:student_management/features/batch/data/data_source/local_datasource/batch_local_data_source.dart';
+import 'package:student_management/features/batch/data/data_source/remote_datasource/batch_remote_data_source.dart';
 import 'package:student_management/features/batch/data/model/batch_hive_model.dart';
 import 'package:student_management/features/batch/data/repository/local_repository/batch_local_repository.dart';
+import 'package:student_management/features/batch/data/repository/remote_repository/batch_remote_reposiotry.dart';
 import 'package:student_management/features/batch/domain/repository/batch_repository.dart';
 import 'package:student_management/features/batch/domain/use_case/create_batch_usecase.dart';
 import 'package:student_management/features/batch/domain/use_case/delete_batch_usecase.dart';
@@ -34,6 +39,12 @@ Future initDependencies() async {
   await _initHomeModule();
   await _initAuthModule();
   await _initSplashModule();
+}
+
+Future<void> initApiModule() async {
+  // Dio instance
+  serviceLocator.registerLazySingleton<Dio>(() => Dio());
+  serviceLocator.registerLazySingleton(() => ApiService(serviceLocator<Dio>()));
 }
 
 Future _initCourseModule() async {
@@ -77,26 +88,42 @@ Future _initCourseModule() async {
   );
 }
 
-Future _initBatchModule() async {
-  serviceLocator.registerFactory(() => BatchViewModel());
+Future<void> _initBatchModule() async {
+  // Data Source
+  serviceLocator.registerFactory(
+        () => BatchLocalDataSource(hiveService: serviceLocator<HiveService>(), batchHiveModel: BatchHiveModel(batchName: '')),
+  );
+  serviceLocator.registerFactory(
+        () => BatchRemoteDatasource(apiService: serviceLocator<ApiService>()),
+  );
 
-  serviceLocator.registerLazySingleton<HiveService>(() => HiveService());
-  serviceLocator.registerLazySingleton<BatchLocalDataSource>(() => BatchLocalDataSource(
-    batchHiveModel: BatchHiveModel(batchName: ''),
-    hiveService: serviceLocator(),
-  ));
-  serviceLocator.registerLazySingleton<IBatchRepository>(() => BatchLocalRepository(
-    batchDataSource: serviceLocator(),
-  ));
-  serviceLocator.registerLazySingleton(() => CreateBatchUseCase(batchRepository: serviceLocator()));
-  serviceLocator.registerLazySingleton(() => DeleteBatchUseCase(batchRepository: serviceLocator()));
-  serviceLocator.registerLazySingleton(() => GetAllBatchesUseCase(batchRepository: serviceLocator()));
-  serviceLocator.registerFactory(() => BatchBloc(
-    batchUsecase: serviceLocator(),
-    deleteBatches: serviceLocator(),
-    getbatches: serviceLocator(),
-  ));
-}
+  // Repository
+  serviceLocator.registerFactory<BatchLocalRepository>(
+        () => BatchLocalRepository(
+       batchDataSource: serviceLocator<BatchLocalDataSource>(),
+    ),
+  );
+
+  serviceLocator.registerFactory<BatchRemoteRepository>(
+        () => BatchRemoteRepository(batchRemoteDataSource:serviceLocator<BatchRemoteDatasource>(),
+
+    ),
+  );
+
+  serviceLocator.registerFactory(
+        () => GetAllBatchesUseCase(
+      batchRepository: serviceLocator<BatchRemoteRepository>(),
+    ),
+  );
+  serviceLocator.registerFactory(
+          () => CreateBatchUseCase(
+        batchRepository: serviceLocator<BatchRemoteRepository>(),
+      ));
+
+  serviceLocator.registerFactory(()=>DeleteBatchUseCase(
+       batchRepository: serviceLocator<BatchRemoteRepository>()));
+
+  }
 
 Future _initHomeModule() async {
   serviceLocator.registerLazySingleton(() => HomeViewModel());
@@ -104,8 +131,7 @@ Future _initHomeModule() async {
 
 Future _initAuthModule() async {
   serviceLocator.registerFactory(() => LoginViewModel());
-  // serviceLocator.registerLazySingleton<HiveService>(() => HiveService());
-  serviceLocator.registerLazySingleton<StudentLocalDataSource>(()=>StudentLocalDataSource(hiveService: serviceLocator()));
+  serviceLocator.registerLazySingleton<StudentDataSource>(()=>StudentLocalDataSource(hiveService: serviceLocator()));
 
   serviceLocator.registerLazySingleton<IStudentRepository>(
         () => StudentLocalRepository(studentDataSource: serviceLocator()
